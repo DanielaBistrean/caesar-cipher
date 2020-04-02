@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <unistd.h>
 
 void version_content ()
 {
@@ -19,13 +20,12 @@ void help_content (const char *program_name)
     printf ("\t-c\tEncrypt a file\n");
     printf ("\t-d\tDecript a file\n");
     printf ("\t-k\tSpecify the key for encrypt/decrypt\n");
+    printf ("\t-i\tGet the key from stdin to encrypt/decrypt a file\n");
     printf ("\t-h\tDisplay this information\n");
 }
 
 int encrypt (const char *key, const char *infile, const char *outfile)
 {
-    printf ("Will encrypt \"%s\" with key \"%s\" and save the result to \"%s\"\n", infile, key, outfile);
-
     int ch, idx = 0;
     FILE *in = fopen (infile, "rb");
     if (in == NULL)
@@ -64,8 +64,6 @@ int encrypt (const char *key, const char *infile, const char *outfile)
 
 int decrypt (const char* key, const char *infile, const char *outfile)
 {
-    printf ("Will decrypt \"%s\" with key \"%s\" and save the result to \"%s\"\n", infile, key, outfile);
-
     FILE *in = fopen (infile,"rb");
     if (in == NULL)
     {
@@ -88,7 +86,7 @@ int decrypt (const char* key, const char *infile, const char *outfile)
         ch = fgetc (in);
 
         if (feof (in))
-            return 1;
+            return -1;
 
         ch = (ch - key[idx]) % 256;
         idx = (idx + 1) % key_size;
@@ -103,11 +101,11 @@ int decrypt (const char* key, const char *infile, const char *outfile)
 
 int main (int argc, char *argv[])
 {
-    int opt, v = 0, h = 0, c = 0, d = 0;
+    int opt, v = 0, h = 0, c = 0, d = 0, i = 0;
 
     char *key = NULL, *infile, *outfile;
 
-    while((opt = getopt (argc, argv, ":vhc:d:k:")) != -1) 
+    while((opt = getopt (argc, argv, ":vhc:d:k:i")) != -1) 
     {
         switch (opt)
         {
@@ -136,15 +134,24 @@ int main (int argc, char *argv[])
             {
                 d++;
                 infile = optarg;
+                break;
+            }
+            case 'i':
+            {
+                i = 1;
+                break;
             }
             case ':':
             {
-                printf ("option needs a value\n");
+                fprintf (stderr, "option needs a value\n");
+                exit (1);
                 break;
             }
-            case '?':
+            //case '?':
+            default:
             {
-                printf ("Unknown option: %c\n", optopt);
+                fprintf (stderr, "Unknown option: %c\n", optopt);
+                exit (1);
                 break;
             }
         }
@@ -162,26 +169,35 @@ int main (int argc, char *argv[])
         return 0;
     }
 
+    if (i)
+    {
+        if (key)
+        {
+            fprintf (stderr, "Ignoring -k argument and waiting for key from stdin\n");
+        }
+        key = getpass ("");
+    }
+
     if (c && d)
     {
         fprintf (stderr, "You must select one of {c, d}, but not both\n");
         printf ("\n");
         help_content (argv[0]);
-        return 1;
+        return -1;
     }
     else if (c > 1 || d > 1)
     {
         fprintf (stderr, "You must select {c, d} only once\n");
         printf ("\n");
         help_content (argv[0]);
-        return 1;
+        return -1;
     }
     else if (c == 0 && d == 0)
     {
         fprintf (stderr, "You must select at least one of {c, d}\n");
         printf ("\n");
         help_content (argv[0]);
-        return 1;
+        return -1;
     }
 
     if (key == NULL)
@@ -189,7 +205,7 @@ int main (int argc, char *argv[])
         fprintf (stderr, "You must select a key\n");
         printf ("\n");
         help_content (argv[0]);
-        return 1;
+        return -1;
     }
 
     if (optind < argc)
@@ -203,13 +219,11 @@ int main (int argc, char *argv[])
 
     if (c)
     {
-        encrypt (key, infile, outfile);
+        return encrypt (key, infile, outfile);
     }
     else
     {
-        decrypt (key, infile, outfile);
+        return decrypt (key, infile, outfile);
     }
-        
-    return 0;
 }
 
